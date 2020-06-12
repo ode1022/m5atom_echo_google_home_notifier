@@ -1,0 +1,8 @@
+const char* ssid     = "SSID";
+const char* password = "Wifi Password";
+
+// IPかGoogleHomeの名前を入力。IPのほうがmDNS処理がスキップできるので起動が3秒ほど早い
+const char googleHomeDisplayName[] = "GoogleHome名";
+//IPAddress *ip = new IPAddress(192, 168, 1, 10);
+IPAddress *ip = NULL;
+const char googleHomeLang[] = "ja";
