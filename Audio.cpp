@@ -4,15 +4,20 @@ Audio::Audio(MicType micType) {
   wavData = new char*[wavDataSize / dividedWavDataSize];
   for (int i = 0; i < wavDataSize / dividedWavDataSize; ++i) wavData[i] = new char[dividedWavDataSize];
   i2s = new I2S(micType);
+  out = new AudioOutputI2S();
+  mp3 = new AudioGeneratorMP3();
+  initMic(); // AudioOutputI2Sをnew時にスピーカーのI2Sが初期化されるため、それ以降にマイクを初期化する必要がある
 }
 
 Audio::~Audio() {
   for (int i = 0; i < wavDataSize / dividedWavDataSize; ++i) delete[] wavData[i];
   delete[] wavData;
   delete i2s;
+  delete mp3;
+  delete out;
 }
 
-void Audio::CreateWavHeader(byte* header, int waveDataSize) {
+void Audio::createWavHeader(byte* header, int waveDataSize) {
   header[0] = 'R';
   header[1] = 'I';
   header[2] = 'F';
@@ -60,21 +65,6 @@ void Audio::CreateWavHeader(byte* header, int waveDataSize) {
   header[43] = (byte)((waveDataSize >> 24) & 0xFF);
 }
 
-uint8_t gainF2P6;
-bool SetGain(float f) {
-  if (f > 8.0) f = 8.0;
-  if (f < 0.0) f = 0.0;
-  gainF2P6 = (uint8_t)(f * (1 << 6));
-  return true;
-}
-inline int16_t Amplify(int16_t s) {
-  int32_t v = (s * gainF2P6) >> 6;
-  if (v < -65536) return -65536;
-  else if (v > 65536) return 65536;
-  else return (int16_t)(v & 0xffff);
-}
-
-
 void example_disp_buf(uint8_t* buf, int length)
 {
   printf("======\n");
@@ -87,12 +77,11 @@ void example_disp_buf(uint8_t* buf, int length)
   printf("======\n");
 }
 
-#define AGC_FRAME_BYTES     320
-void Audio::AGCTask()
+void Audio::agcTask()
 {
   // http://shokai.org/blog/archives/5053
 
-  int bitBitPerSample = i2s->GetBitPerSample();
+  int bitBitPerSample = i2s->getBitPerSample();
   
   int16_t max = 0;
   int dataSize = 8;
@@ -124,17 +113,16 @@ void Audio::AGCTask()
 }
 
 
-void Audio::InitMic() {
-    i2s->InitMic();
+void Audio::initMic() {
+    i2s->initMic();
 }
 
-void Audio::Record() {
-  CreateWavHeader(paddedHeader, wavDataSize);
-  int bitBitPerSample = i2s->GetBitPerSample();
-  SetGain(4);
+void Audio::record() {
+  createWavHeader(paddedHeader, wavDataSize);
+  int bitBitPerSample = i2s->getBitPerSample();
   if (bitBitPerSample == 16) {
     for (int j = 0; j < wavDataSize / dividedWavDataSize; ++j) {
-      i2s->Read(i2sBuffer, i2sBufferSize / 2);
+      i2s->read(i2sBuffer, i2sBufferSize / 2);
       for (int i = 0; i < i2sBufferSize / 8; ++i) {
         wavData[j][2 * i] = i2sBuffer[4 * i + 2];
         wavData[j][2 * i + 1] = i2sBuffer[4 * i + 3];
@@ -143,7 +131,7 @@ void Audio::Record() {
   }
   else if (bitBitPerSample == 32) {
     for (int j = 0; j < wavDataSize / dividedWavDataSize; ++j) {
-      i2s->Read(i2sBuffer, i2sBufferSize);
+      i2s->read(i2sBuffer, i2sBufferSize);
       for (int i = 0; i < i2sBufferSize / 8; ++i) {
         wavData[j][2 * i] = i2sBuffer[8 * i + 2];
         wavData[j][2 * i + 1] = i2sBuffer[8 * i + 3];
@@ -152,14 +140,73 @@ void Audio::Record() {
 
     //example_disp_buf((uint8_t*) i2sBuffer, i2sBufferSize);
   }
-  AGCTask();
+  agcTask();
 }
 
 
-void Audio::InitSpeaker() {
-  i2s->InitSpeaker();
+void Audio::initSpeaker() {
+  i2s->initSpeaker();
 }
 
-void Audio::Play(unsigned char audio_data[], int numData) {
-  i2s->Write(audio_data, numData);
+void Audio::playWaveBuf(unsigned char audio_data[], int numData) {
+  i2s->write(audio_data, numData);
+}
+
+// MP3を非同期再生
+void Audio::playMP3(char *filename) {
+  // 再生中の場合は停止させる
+  if (thMP3 != NULL) {
+    Serial.printf("MP3 doPlayStop\n");
+    doPlayStop = true;
+  }
+  // 停止するまで待機
+  waitMP3();
+  
+  // https://github.com/earlephilhower/ESP8266Audio/blob/master/src/AudioFileSourceFS.cpp
+  // を見る限りAudioFileSourceSPIFFSを一度closeしたら再オープンするようなメソッドはないためnewしなおす。
+  file = new AudioFileSourceSPIFFS(filename);
+  initSpeaker();
+  mp3->begin(file, out);
+  Serial.printf("MP3 start\n");
+
+  muxMp3 = xSemaphoreCreateBinary();
+  // クラスインスタンスをTask実行
+  // https://forum.arduino.cc/index.php?topic=658230.0
+  xTaskCreatePinnedToCore(this->loopPlayMP3, "loopPlayMP3", 8192, this, 5, &thMP3, 0); //マルチタスク core 0 実行
+}
+
+// MP3の非同期再生が終了するのを待機
+void Audio::waitMP3() {
+//  while (true) {
+//    if (thMP3 == NULL) {
+//      break;
+//    }
+//    delay(5); 
+//  }
+  if (muxMp3 != NULL) {
+    xSemaphoreTake(muxMp3, portMAX_DELAY);
+  }
+}
+
+void Audio::loopPlayMP3(void *pvParameters) {
+  Audio *pThis = (Audio *) pvParameters; 
+  
+  while (true) {
+    if (pThis->mp3->isRunning()) {
+      if (!pThis->mp3->loop() || pThis->doPlayStop) {
+        pThis->mp3->stop();
+        delete pThis->file;
+      }
+    } else {
+      Serial.printf("MP3 done\n");
+      break;
+    }
+    delay(5);    
+  }
+
+  xSemaphoreGive(pThis->muxMp3);
+  pThis->muxMp3 = NULL;
+  pThis->thMP3 = NULL;
+  pThis->doPlayStop = false;
+  vTaskDelete(NULL);
 }

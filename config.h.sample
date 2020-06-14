@@ -6,3 +6,6 @@ const char googleHomeDisplayName[] = "GoogleHome名";
 //IPAddress *ip = new IPAddress(192, 168, 1, 10);
 IPAddress *ip = NULL;
 const char googleHomeLang[] = "ja";
+
+// 起動時に自動で録音開始するかフラグ。バッテリーのときはtrueなど。ACアダプタの場合はfalseにすると電源接続時に録音再生しないですむ。
+bool recordingWhenBoote = true;

@@ -20,11 +20,11 @@ class I2S {
   i2s_bits_per_sample_t BITS_PER_SAMPLE;
 public:
   I2S(MicType micType);
-  void InitMic();
-  int Read(char* data, int numData);
-  int GetBitPerSample();
-  void InitSpeaker();
-  size_t Write(unsigned char audio_data[], int numData);
+  void initMic();
+  int read(char* data, int numData);
+  int getBitPerSample();
+  void initSpeaker();
+  size_t write(unsigned char audio_data[], int numData);
 };
 
 #endif // _I2S_H

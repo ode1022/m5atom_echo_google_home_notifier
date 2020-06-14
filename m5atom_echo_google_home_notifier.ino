@@ -6,7 +6,8 @@
 #include <esp8266-google-home-notifier.h> // https://github.com/horihiro/esp8266-google-home-notifier
 #include <M5Atom.h> // https://github.com/m5stack/M5Atom https://github.com/FastLED/FastLED
 
-#include "Audio.h"
+#include "SPIFFS.h"
+#include "Audio.h" // https://github.com/earlephilhower/ESP8266Audio
 
 Audio* audio;
 
@@ -17,6 +18,8 @@ void setup() {
   M5.begin(true, false, true);
 
   printf("esp_get_free_heap_size: %d\n", esp_get_free_heap_size());
+
+  SPIFFS.begin(true);
 
   Serial.print("connecting to Wi-Fi");
 
@@ -56,28 +59,29 @@ void setup() {
   server.begin();
 
   audio = new Audio(M5ATOM_ECHO);
-  audio->InitMic();
-  
-  printf("esp_get_free_heap_size: %d\n", esp_get_free_heap_size());
 
+  printf("esp_get_free_heap_size: %d\n", esp_get_free_heap_size());
   Serial.println("setup end");
 
-  // バッテリーのときはこのまま。ACアダプタの場合はコメントアウトすると電源接続時に録音再生しないですむ。
-  delay(200); // I2S Micの初期化が間に合っていないためか初回ノイズが多くはいるのでdelayする
-  recordNotify();
+  if (recordingWhenBoote) {
+    delay(200); // I2S Micの初期化が間に合っていないためなのかノイズが多くはいるのでdelayする
+    recordNotify();
+  }
 }
 
 // 録音 & Google Homeへ再生依頼のリクエストをする
 void recordNotify() {
-  record();
-  notifySound();
-}
-
-// 録音
-void record() {
   Serial.println("\r\nRecord start!\r\n");
-  audio->Record();
+  audio->record();
   Serial.println("\r\nRecord end!\r\n");
+
+  audio->playMP3("/gra_cre.mp3");
+  // mp3再生は非同期のため再生が終了するのを待機する。(ATOM Echoのマイクとスピーカーは排他のため)
+  audio->waitMP3(); 
+  // マイクが使えるように初期化して戻す（ATOM Echoのスピーカーとマイクは排他のため）
+  audio->initMic();
+
+  notifySound();
 }
 
 // HTTPリクエストに対して録音済みデータを出力
@@ -139,13 +143,44 @@ void handleRootPath() {
   server.send(200, "text/html", "<html><head></head><body><input type=\"text\"><button>speech</button><script>var d = document;d.querySelector('button').addEventListener('click',function(){xhr = new XMLHttpRequest();xhr.open('GET','/speech?phrase='+encodeURIComponent(d.querySelector('input').value));xhr.send();});</script></body></html>");
 }
 
+int appMode = 1;
+int wasButtonLongPressed = false;
 void loop() {
   server.handleClient();
 
-  if (M5.Btn.isPressed())
+  // ボタン長押しでモード切り替え
+  if (M5.Btn.pressedFor(1000) && !wasButtonLongPressed) {
+    Serial.println("button long pressed");
+    if (appMode == 1) {
+      appMode = 2;
+      audio->playMP3("/gra_cre.mp3");
+    } else {
+      appMode = 1;
+      audio->initMic();
+    }
+    wasButtonLongPressed = true;
+  }
+
+  // ボタン押してから離した（長押しと区別するため離した場合で検知）
+  if (M5.Btn.wasReleased())
   {
-    Serial.println("button pressed");
-    recordNotify();
+    if (wasButtonLongPressed) {
+      // 長押ししてから離した場合は処理しない
+      wasButtonLongPressed = false;
+    } else {
+      // ボタン押した際の処理
+      Serial.println("button released");
+      switch (appMode) {
+        case 1:
+          // ブロードキャストモード
+          recordNotify();
+          break;
+        case 2:
+          // mp3再生モード
+          audio->playMP3("/gra_cre.mp3");
+          break;
+      }
+    }
   }
   M5.update();
 }
