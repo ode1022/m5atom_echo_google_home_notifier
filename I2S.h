@@ -7,6 +7,7 @@
 #include "esp_system.h"
 
 enum MicType {
+  NO_USE,
   ADMP441,
   ICS43434,
   SPH0645LM4H,

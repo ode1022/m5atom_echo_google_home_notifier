@@ -32,7 +32,7 @@ public:
   char** wavData;                                         // It's divided. Because large continuous memory area can't be allocated in esp32.
   byte paddedHeader[headerSize + 4] = {0};                // The size must be multiple of 3 for Base64 encoding. Additional byte size must be even because wave data is 16bit.
 
-  Audio(MicType micType);
+  Audio(MicType micType = NO_USE);
   ~Audio();
   void initMic();
   void record();

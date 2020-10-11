@@ -1,8 +1,10 @@
 #include "Audio.h"
 
 Audio::Audio(MicType micType) {
-  wavData = new char*[wavDataSize / dividedWavDataSize];
-  for (int i = 0; i < wavDataSize / dividedWavDataSize; ++i) wavData[i] = new char[dividedWavDataSize];
+  if (micType != NO_USE) {
+    wavData = new char*[wavDataSize / dividedWavDataSize];
+    for (int i = 0; i < wavDataSize / dividedWavDataSize; ++i) wavData[i] = new char[dividedWavDataSize];
+  }
   i2s = new I2S(micType);
   // AudioOutputI2SクラスをデフォルトのEXTERNAL_I2Sで初期化すると現状の仕様上はGPIO25でI2Sが初期化されしまい後からEcho用のピンでi2s_set_pinしてもGPIO25は使用できなかった。
   // 一度i2s_set_pinするとgpioとして使えなさそうに見えたのでINTERNAL_PDMで初期化することGPIO25がi2s_set_pinされないように回避する(実際に利用時のI2Sの初期化はinitSpeaker内でおこなうためここは適当でよいため）
