@@ -4,7 +4,9 @@ Audio::Audio(MicType micType) {
   wavData = new char*[wavDataSize / dividedWavDataSize];
   for (int i = 0; i < wavDataSize / dividedWavDataSize; ++i) wavData[i] = new char[dividedWavDataSize];
   i2s = new I2S(micType);
-  out = new AudioOutputI2S();
+  // AudioOutputI2SクラスをデフォルトのEXTERNAL_I2Sで初期化すると現状の仕様上はGPIO25でI2Sが初期化されしまい後からEcho用のピンでi2s_set_pinしてもGPIO25は使用できなかった。
+  // 一度i2s_set_pinするとgpioとして使えなさそうに見えたのでINTERNAL_PDMで初期化することGPIO25がi2s_set_pinされないように回避する(実際に利用時のI2Sの初期化はinitSpeaker内でおこなうためここは適当でよいため）
+  out = new AudioOutputI2S(I2S_NUM_0, AudioOutputI2S::INTERNAL_PDM);
   mp3 = new AudioGeneratorMP3();
   initMic(); // AudioOutputI2Sをnew時にスピーカーのI2Sが初期化されるため、それ以降にマイクを初期化する必要がある
 }
