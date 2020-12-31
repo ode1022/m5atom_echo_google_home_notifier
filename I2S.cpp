@@ -112,43 +112,6 @@ int I2S::getBitPerSample() {
   return (int)BITS_PER_SAMPLE;
 }
 
-
-void I2S::initSpeaker()
-{
-    esp_err_t err = ESP_OK;
-
-    i2s_driver_uninstall(SPEAKER_I2S_NUMBER);
-    i2s_config_t i2s_config = {
-        .mode = (i2s_mode_t)(I2S_MODE_MASTER),
-        .sample_rate = 44100,
-        .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT, // is fixed at 12bit, stereo, MSB
-        .channel_format = I2S_CHANNEL_FMT_ALL_RIGHT,
-        .communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB),
-        .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-        .dma_buf_count = 8,
-        .dma_buf_len = 64,
-    };
-
-    i2s_config.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
-    i2s_config.use_apll = false;
-    i2s_config.tx_desc_auto_clear = true;
-
-    //Serial.println("Init i2s_driver_install");
-
-    err += i2s_driver_install(SPEAKER_I2S_NUMBER, &i2s_config, 0, NULL);
-    i2s_pin_config_t tx_pin_config;
-
-    tx_pin_config.bck_io_num = CONFIG_I2S_BCK_PIN;
-    tx_pin_config.ws_io_num = CONFIG_I2S_LRCK_PIN;
-    tx_pin_config.data_out_num = CONFIG_I2S_DATA_PIN;
-    tx_pin_config.data_in_num = CONFIG_I2S_DATA_IN_PIN;
-
-    //Serial.println("Init i2s_set_pin");
-    err += i2s_set_pin(SPEAKER_I2S_NUMBER, &tx_pin_config);
-    //Serial.println("Init i2s_set_clk");
-    err += i2s_set_clk(SPEAKER_I2S_NUMBER, 44100, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_STEREO);
-}
-
 size_t I2S::write(unsigned char audio_data[], int numData) {
   size_t bytes_written;
   i2s_write(SPEAKER_I2S_NUMBER, audio_data, numData, &bytes_written, portMAX_DELAY);

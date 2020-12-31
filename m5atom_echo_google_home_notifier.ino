@@ -59,7 +59,7 @@ void setup() {
   server.begin();
 
   audio = new Audio(M5ATOM_ECHO);
-
+  
   printf("esp_get_free_heap_size: %d\n", esp_get_free_heap_size());
   Serial.println("setup end");
 

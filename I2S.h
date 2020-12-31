@@ -24,7 +24,6 @@ public:
   void initMic();
   int read(char* data, int numData);
   int getBitPerSample();
-  void initSpeaker();
   size_t write(unsigned char audio_data[], int numData);
 };
 

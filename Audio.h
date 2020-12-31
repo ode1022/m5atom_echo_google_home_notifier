@@ -36,10 +36,10 @@ public:
   ~Audio();
   void initMic();
   void record();
-  void initSpeaker();
   void playWaveBuf(unsigned char audio_data[], int numData);
   void playMP3(char *filename);
   void waitMP3();
+  void setGain(int volume); // max100想定だが400までいけるきがする。AudioOutputI2Sが4までなので https://github.com/earlephilhower/ESP8266Audio/blob/e59319f605d45d06ae0c6a7f983872c0366dd11c/src/AudioOutput.h#L35
 };
 
 #endif // _AUDIO_H
